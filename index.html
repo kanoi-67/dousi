@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動詞変形タイムアタックチャレンジ</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f8ff;
+            padding: 10px;
+            touch-action: manipulation;
+        }
+
+        #game-container {
+            width: 95%;
+            max-width: 600px;
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333366;
+            text-align: center;
+            font-size: 1.5em;
+        }
+
+        p {
+            font-size: 0.9em;
+            text-align: center;
+        }
+        
+        #info-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #timer-box, #score-box {
+            padding: 8px 15px;
+            background-color: #ffcc00;
+            color: #333;
+            font-weight: bold;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 1.2em;
+            flex: 1;
+            margin: 0 5px;
+        }
+
+        .time-low {
+            background-color: #ff7f50 !important;
+        }
+
+        #puzzle-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .puzzle-piece {
+            background-color: #add8e6;
+            color: #333;
+            padding: 15px 5px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 1.1em;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid #333366;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            opacity: 1;
+            transition: opacity 0.3s ease-out;
+        }
+
+        .puzzle-piece:active {
+            transform: scale(0.98);
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .selected {
+            border: 4px solid #ff6347;
+            background-color: #ffdab9;
+        }
+
+        #message {
+            margin-top: 15px;
+            font-size: 1.1em;
+            font-weight: bold;
+            min-height: 25px;
+            text-align: center;
+        }
+
+        #button-area {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+        }
+
+        .action-button {
+            padding: 12px 15px;
+            font-size: 1.1em;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            flex: 1;
+            margin: 0 5px;
+            transition: background-color 0.3s;
+        }
+
+        #start-button {
+            background-color: #4CAF50;
+        }
+        #start-button:hover {
+            background-color: #45a049;
+        }
+
+        #next-button {
+            background-color: #007bff;
+        }
+        #next-button:hover {
+            background-color: #0056b3;
+        }
+
+        #restart-button {
+            background-color: #dc3545;
+        }
+        #restart-button:hover {
+            background-color: #c82333;
+        }
+
+        .correct {
+            background-color: #90ee90;
+            color: #1a4f1a;
+            pointer-events: none;
+        }
+        
+        .disabled {
+            pointer-events: none;
+            opacity: 0.5;
+        }
+        
+        /* ゲーム開始前のオーバーレイ */
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>動詞変形タイムアタックチャレンジ</h1>
+        
+        <div id="info-bar">
+            <div id="timer-box">残り時間: 5:00</div>
+            <div id="score-box">正解数: 0 問</div>
+        </div>
+
+        <p>✨ **順序に注意！** 原形 → 過去形 → 過去分詞の順にタップして、正しい動詞セットを2組見つけよう！<br>（例外パターンは順序が自由になる場合があります）</p>
+
+        <div id="puzzle-grid">
+            </div>
+
+        <div id="message"></div>
+
+        <div id="button-area">
+            <button id="next-button" class="action-button hidden">次のパズルへ</button>
+            <button id="restart-button" class="action-button">リスタート</button>
+        </div>
+        
+    </div>
+
+    <div id="start-screen">
+        <h2 style="color: #333366;">5分間チャレンジ！</h2>
+        <p style="font-size: 1.1em; margin-bottom: 30px;">どれだけ多くの動詞セットを解けるか試してみよう！</p>
+        <button id="start-button" class="action-button" style="width: 180px; padding: 12px 25px;">ゲームスタート！</button>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+// 中学校で学習する主要な不規則動詞リスト (変更なし)
+const ALL_VERB_SETS = [
+    ["be", "was/were", "been"], 
+    ["become", "became", "become"],
+    ["begin", "began", "begun"],
+    ["break", "broke", "broken"],
+    ["bring", "brought", "brought"],
+    ["buy", "bought", "bought"],
+    ["come", "came", "come"],
+    ["cut", "cut", "cut"],
+    ["do", "did", "done"],
+    ["draw", "drew", "drawn"],
+    ["drink", "drank", "drunk"],
+    ["drive", "drove", "driven"],
+    ["eat", "ate", "eaten"],
+    ["fall", "fell", "fallen"],
+    ["feel", "felt", "felt"],
+    ["find", "found", "found"],
+    ["fly", "flew", "flown"],
+    ["get", "got", "gotten"],
+    ["give", "gave", "given"],
+    ["go", "went", "gone"],
+    ["have", "had", "had"],
+    ["hear", "heard", "heard"],
+    ["keep", "kept", "kept"],
+    ["know", "knew", "known"],
+    ["leave", "left", "left"],
+    ["make", "made", "made"],
+    ["meet", "met", "met"],
+    ["read", "read", "read"],
+    ["run", "ran", "run"],
+    ["say", "said", "said"],
+    ["see", "saw", "seen"],
+    ["send", "sent", "sent"],
+    ["sing", "sang", "sung"],
+    ["sleep", "slept", "slept"],
+    ["speak", "spoke", "spoken"],
+    ["stand", "stood", "stood"],
+    ["swim", "swam", "swum"],
+    ["take", "took", "taken"],
+    ["tell", "told", "told"],
+    ["think", "thought", "thought"],
+    ["wear", "wore", "worn"],
+    ["write", "wrote", "written"]
+];
+
+const TIME_LIMIT_SECONDS = 300; 
+
+// DOM要素の取得
+const grid = document.getElementById('puzzle-grid');
+const message = document.getElementById('message');
+const timerBox = document.getElementById('timer-box');
+const scoreBox = document.getElementById('score-box');
+const startScreen = document.getElementById('start-screen');
+const startButton = document.getElementById('start-button');
+const nextButton = document.getElementById('next-button');
+const restartButton = document.getElementById('restart-button');
+
+// ゲームの状態変数
+let allVerbSetsCopy = [...ALL_VERB_SETS];
+let currentVerbSet = [];
+let allPieces = [];
+let selectedPieces = [];
+let correctSetsFound = 0;
+let totalScore = 0;
+let timerInterval;
+let gameIsRunning = false;
+let timeLeft = TIME_LIMIT_SECONDS;
+
+// --- ユーティリティ関数 ---
+
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
+
+/**
+ * ダミー単語を生成する関数
+ */
+function generateDummyWord(baseWord, usedWords) {
+    let dummy = '';
+    let attempts = 0;
+    
+    while (dummy === '' || usedWords.includes(dummy) || dummy.length < 2) {
+        attempts++;
+        if (attempts > 10) return baseWord + 'x'; // 失敗したら諦めてユニークなものを返す
+        
+        if (Math.random() < 0.3 && baseWord.length > 2) {
+            dummy = baseWord + (Math.random() < 0.5 ? 'ed' : 'en');
+        } else if (Math.random() < 0.6 && baseWord.length > 2) {
+            const vowels = ['a', 'e', 'i', 'o', 'u'];
+            let foundVowel = false;
+            dummy = baseWord.replace(/[aeiou]/g, function(vowel) {
+                if (foundVowel || Math.random() < 0.5) return vowel;
+                foundVowel = true;
+                let newVowel = vowels[Math.floor(Math.random() * vowels.length)];
+                return (newVowel === vowel) ? (vowels[(vowels.indexOf(vowel) + 1) % vowels.length]) : newVowel;
+            });
+        } else {
+            dummy = baseWord.substring(0, baseWord.length - 1);
+        }
+        
+        if (dummy.toLowerCase() === baseWord.toLowerCase()) {
+            dummy = ''; 
+        }
+    }
+    
+    return dummy;
+}
+
+const ENCOURAGEMENT_MESSAGES = [
+    "🔥 いい調子！集中できてるね！",
+    "👍 正解！どんどん進もう！",
+    "🌟 その調子で次も頑張ろう！",
+    "😊 落ち着いて、次の動詞をよく見て。",
+    "💯 ナイス！記憶が定着してる証拠だよ！"
+];
+
+const FAILURE_MESSAGES = [
+    "🙅‍♂️ 順序か組み合わせが違います。原形 → 過去形 → 過去分詞の順でタップしてください！",
+    "😟 惜しい！一つだけ違ったかも？",
+    "💡 変化のパターンを思い出して！"
+];
+
+
+// --- タイマー関連の関数 (変更なし) ---
+
+function updateTimer() {
+    const minutes = Math.floor(timeLeft / 60);
+    const remainingSeconds = timeLeft % 60;
+    timerBox.textContent = `残り時間: ${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    
+    if (timeLeft <= 60 && timeLeft > 0) {
+        timerBox.classList.add('time-low');
+    } else {
+        timerBox.classList.remove('time-low');
+    }
+}
+
+function startTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        updateTimer();
+
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            endGame();
+        }
+    }, 1000);
+}
+
+// --- ゲームロジックの関数 ---
+
+function startGame() {
+    startScreen.classList.add('hidden');
+    gameIsRunning = true;
+    totalScore = 0;
+    timeLeft = TIME_LIMIT_SECONDS;
+    updateTimer();
+    scoreBox.textContent = `正解数: ${totalScore} 問`;
+    
+    allVerbSetsCopy = [...ALL_VERB_SETS];
+    shuffleArray(allVerbSetsCopy);
+    
+    initializePuzzle();
+    
+    startTimer();
+    
+    nextButton.classList.add('hidden');
+    restartButton.textContent = 'リスタート';
+}
+
+function initializePuzzle() {
+    grid.innerHTML = '';
+    message.textContent = '原形 → 過去形 → 過去分詞のセットを2組見つけよう！';
+    selectedPieces = [];
+    allPieces = [];
+    correctSetsFound = 0;
+    
+    grid.classList.remove('disabled');
+    nextButton.classList.add('hidden');
+
+    if (allVerbSetsCopy.length < 2) {
+        allVerbSetsCopy = [...ALL_VERB_SETS];
+        shuffleArray(allVerbSetsCopy);
+    }
+    
+    const setIndex1 = allVerbSetsCopy.pop();
+    const setIndex2 = allVerbSetsCopy.pop();
+    currentVerbSet = [setIndex1, setIndex2];
+
+    let pieceIdCounter = 0;
+    let correctWords = []; // ダミー生成のために使用中の正解単語を収集
+
+    currentVerbSet.forEach((set, setIndex) => {
+        set.forEach((verb, typeIndex) => {
+            allPieces.push({ 
+                word: verb, 
+                correctOrder: typeIndex,
+                isDummy: false,
+                setIndex: setIndex,
+                id: pieceIdCounter++,
+                originalSet: set 
+            });
+            correctWords.push(verb);
+        });
+    });
+
+    // 3. ダミーピース 3つ を作成
+    for (let i = 0; i < 3; i++) {
+        const baseWord = currentVerbSet[0][i]; 
+        const dummyWord = generateDummyWord(baseWord, correctWords);
+        allPieces.push({
+            word: dummyWord,
+            correctOrder: -1,
+            isDummy: true,
+            setIndex: -1,
+            id: pieceIdCounter++
+        });
+    }
+
+    shuffleArray(allPieces);
+
+    allPieces.forEach(pieceData => {
+        const piece = document.createElement('div');
+        piece.classList.add('puzzle-piece');
+        piece.textContent = pieceData.word;
+        piece.dataset.id = pieceData.id;
+        piece.addEventListener('click', () => handlePieceClick(piece, pieceData));
+        grid.appendChild(piece);
+    });
+}
+
+function handlePieceClick(piece, pieceData) {
+    if (!gameIsRunning || piece.classList.contains('correct') || selectedPieces.includes(piece)) {
+        return; 
+    }
+
+    piece.classList.add('selected');
+    selectedPieces.push(piece);
+
+    if (selectedPieces.length === 3) {
+        checkCombination();
+    }
+}
+
+/**
+ * 選択された3つのピースの組み合わせをチェックする関数
+ */
+function checkCombination() {
+    const selectedData = selectedPieces.map(p => allPieces.find(d => d.id == p.dataset.id));
+    
+    let isCorrectSet = false;
+    let isCorrectOrder = false;
+    
+    // 1. 基本的な要素チェック (ダミーなし、同じセット、3形が揃っているか)
+    const allNotDummy = selectedData.every(data => data.isDummy === false);
+    
+    if (allNotDummy) {
+        const firstSetIndex = selectedData[0].setIndex;
+        const sameSetIndex = selectedData.every(data => data.setIndex === firstSetIndex);
+        
+        const orders = selectedData.map(data => data.correctOrder).sort();
+        const correctFormsCount = orders[0] === 0 && orders[1] === 1 && orders[2] === 2;
+
+        if (sameSetIndex && correctFormsCount) {
+            
+            // 2. 順序チェック (ルール適用)
+            const tappedOrders = selectedData.map(data => data.correctOrder);
+            const originalSet = selectedData[0].originalSet; 
+            const baseForm = originalSet[0];
+            const pastForm = originalSet[1];
+            const pastParticipleForm = originalSet[2];
+            
+            // --- 順序判定ロジック ---
+            
+            // A. すべて同形 (cut-cut-cut, read-read-readなど)
+            if (baseForm === pastForm && pastForm === pastParticipleForm) {
+                isCorrectOrder = true; // 順序は問わない
+            } 
+            // B. 原形と過去分詞が同形 (come-came-come, run-ran-runなど)
+            else if (baseForm === pastParticipleForm && baseForm !== pastForm) {
+                // 原形(0)と過去分詞(2)が最初と最後のどちらか、過去形(1)が真ん中
+                // 順序は (0, 1, 2) または (2, 1, 0)
+                if (tappedOrders[0] === 0 && tappedOrders[1] === 1 && tappedOrders[2] === 2) {
+                    isCorrectOrder = true; // 原形→過去形→過去分詞
+                } else if (tappedOrders[0] === 2 && tappedOrders[1] === 1 && tappedOrders[2] === 0) {
+                    isCorrectOrder = true; // 過去分詞→過去形→原形 (例外許可)
+                }
+            }
+            // C. 過去形と過去分詞が同形 (bring-brought-brought, say-said-saidなど)
+            else if (pastForm === pastParticipleForm && baseForm !== pastForm) {
+                // 順序は (0, 1, 2) または (0, 2, 1)
+                const isStrictOrder = tappedOrders[0] === 0 && tappedOrders[1] === 1 && tappedOrders[2] === 2;
+                const isFlexibleOrder = tappedOrders[0] === 0 && tappedOrders[1] === 2 && tappedOrders[2] === 1;
+                
+                if (isStrictOrder || isFlexibleOrder) {
+                    isCorrectOrder = true;
+                }
+            }
+            // D. 全て異なる形 (write-wrote-writtenなど)
+            else {
+                // 厳格な順序 (0, 1, 2) のみ
+                if (tappedOrders[0] === 0 && tappedOrders[1] === 1 && tappedOrders[2] === 2) {
+                    isCorrectOrder = true;
+                }
+            }
+            
+            isCorrectSet = isCorrectOrder;
+        }
+    }
+
+
+    if (isCorrectSet) {
+        message.textContent = ENCOURAGEMENT_MESSAGES[Math.floor(Math.random() * ENCOURAGEMENT_MESSAGES.length)];
+        correctSetsFound++;
+        totalScore++;
+        scoreBox.textContent = `正解数: ${totalScore} 問`;
+
+        selectedPieces.forEach(p => {
+            p.classList.remove('selected');
+            p.classList.add('correct');
+        });
+        
+        if (correctSetsFound === 2) {
+            message.textContent = `🎉 2組正解！お見事！ 次のパズルへ進もう！`;
+            grid.classList.add('disabled');
+            nextButton.classList.remove('hidden');
+        }
+    } else {
+        message.textContent = FAILURE_MESSAGES[Math.floor(Math.random() * FAILURE_MESSAGES.length)];
+    }
+
+    // 処理後、選択をリセット
+    setTimeout(() => {
+        if (!isCorrectSet) {
+            selectedPieces.forEach(p => p.classList.remove('selected'));
+        }
+        selectedPieces = [];
+    }, 1000); 
+}
+
+function endGame() {
+    clearInterval(timerInterval);
+    gameIsRunning = false;
+    grid.classList.add('disabled');
+    timerBox.classList.remove('time-low');
+
+    message.innerHTML = `⏱️ **タイムオーバー！** ⏱️<br>あなたの記録は **${totalScore} 問** でした。`;
+    timerBox.textContent = "ゲームオーバー";
+    
+    nextButton.classList.add('hidden');
+    restartButton.textContent = 'もう一度チャレンジ！';
+    
+    startScreen.classList.remove('hidden');
+    startScreen.querySelector('h2').textContent = `最終スコア: ${totalScore} 問！`;
+    startScreen.querySelector('p').textContent = `もう一度挑戦して、ハイスコアを更新しよう！`;
+}
+
+// --- イベントリスナー ---
+
+startButton.addEventListener('click', startGame);
+
+nextButton.addEventListener('click', () => {
+    if (!gameIsRunning) return;
+    grid.classList.remove('disabled');
+    nextButton.classList.add('hidden');
+    initializePuzzle();
+});
+
+restartButton.addEventListener('click', () => {
+    endGame();
+});
+
+// 初期化処理
+initializePuzzle(); 
+grid.classList.add('disabled');
+updateTimer();
+nextButton.classList.add('hidden');
+restartButton.textContent = 'リスタート';
+
+});
+</script>
+</body>
+</html>
